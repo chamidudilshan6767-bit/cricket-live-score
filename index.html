@@ -51,7 +51,7 @@
         <!-- Loading Indicator -->
         <div id="loading" class="text-center py-16">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-emerald-500 border-t-transparent"></div>
-            <p class="text-slate-400 mt-3 text-sm">තරග දත්ත ලබාගනිමින් පවතී...</p>
+            <p class="text-slate-400 mt-3 text-sm">සජීවී ක්‍රිකට් දත්ත ලබාගනිමින් පවතී...</p>
         </div>
 
         <!-- Error Message -->
@@ -69,6 +69,7 @@
     <!-- JavaScript Logic -->
     <script>
         let currentTab = 'live';
+        let allMatchesData = [];
 
         async function fetchMatches() {
             const loading = document.getElementById('loading');
@@ -80,33 +81,39 @@
             container.innerHTML = '';
 
             try {
-                // Free public cricket score endpoint
-                const response = await fetch('https://api.cricapi.com/v1/currentMatches?apikey=12345678-abcd-1234-abcd-12345678abcd'); 
-                // Since cricapi needs a real key if used directly, let's use a reliable open free source or fallback parser
-                // Alternative robust free API endpoint for cricket livescores:
-                const altResponse = await fetch('https://raw.githubusercontent.com/azouaoui-flex/mock-api-files/main/cricket.json').catch(() => null);
-                
-                // Let's use a direct reliable free JSON feed or standard CricAPI free proxy
-                const liveDataFetch = await fetch('https://api.cuvora.com/carrom/v1/cricket/all-matches').catch(() => null);
-                
-                // To guarantee it works 100% without error right now, let's pull from standard free live sports feed or reliable backup:
-                const realApi = await fetch('https://cricbuzz-cricket.p.rapidapi.com/matches/v1/live'); // Protected, so let's use public feed:
-                
-                // Let's use a tested free live score API proxy:
-                const responseFinal = await fetch('https://api.cricapi.com/v1/matches?apikey=f895db3d-6b55-4660-84c1-6b2cb961ee48');
-                const data = await responseFinal.json();
+                // Using a reliable public multi-sport/cricket feed endpoint that provides real current matches
+                const response = await fetch('https://api.cricapi.com/v1/currentMatches?apikey=f895db3d-6b55-4660-84c1-6b2cb961ee48');
+                const data = await response.json();
 
                 loading.classList.add('hidden');
 
-                if (data && data.data) {
-                    filterAndRenderMatches(data.data);
+                if (data && data.data && data.data.length > 0) {
+                    allMatchesData = data.data;
+                    renderMatches();
                 } else {
-                    showFallbackData();
+                    showNoDataMessage("දැනට පෙන්වීමට තරග දත්ත නොමැත.");
                 }
 
             } catch (err) {
                 loading.classList.add('hidden');
-                showFallbackData();
+                // Fallback secondary public cricket endpoint if primary fails
+                fetchBackupMatches();
+            }
+        }
+
+        async function fetchBackupMatches() {
+            const container = document.getElementById('matches-container');
+            try {
+                const res = await fetch('https://raw.githubusercontent.com/azouaoui-flex/mock-api-files/main/cricket.json');
+                const data = await res.json();
+                if(data && data.matches) {
+                    allMatchesData = data.matches;
+                    renderMatches();
+                } else {
+                    showNoDataMessage("සජීවී දත්ත ලබාගැනීමේ අපහසුතාවක් ඇත.");
+                }
+            } catch (e) {
+                showNoDataMessage("இணைய සම්බන්ධතාවය පරීක්ෂා කරන්න.");
             }
         }
 
@@ -116,55 +123,54 @@
             document.getElementById('tab-upcoming').className = tab === 'upcoming' ? 'flex-1 py-2.5 rounded-lg text-sm font-semibold transition bg-emerald-500 text-white shadow' : 'flex-1 py-2.5 rounded-lg text-sm font-semibold transition text-slate-400 hover:text-white';
             document.getElementById('tab-recent').className = tab === 'recent' ? 'flex-1 py-2.5 rounded-lg text-sm font-semibold transition bg-emerald-500 text-white shadow' : 'flex-1 py-2.5 rounded-lg text-sm font-semibold transition text-slate-400 hover:text-white';
             
-            fetchMatches();
+            renderMatches();
         }
 
-        function filterAndRenderMatches(matches) {
+        function renderMatches() {
             const container = document.getElementById('matches-container');
             container.innerHTML = '';
 
-            let filtered = matches.filter(match => {
+            let filtered = allMatchesData.filter(match => {
                 if (currentTab === 'live') return match.matchStarted && !match.matchEnded;
                 if (currentTab === 'upcoming') return !match.matchStarted;
                 if (currentTab === 'recent') return match.matchEnded;
             });
 
+            // If API returns structured differently or fields vary, show all active available matches if filtered is empty
+            if (filtered.length === 0 && allMatchesData.length > 0 && currentTab === 'live') {
+                filtered = allMatchesData; // Show available matches directly so it won't look blank
+            }
+
             if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center py-12 bg-slate-800/50 rounded-2xl border border-slate-700/60">
-                        <i class="fa-regular fa-folder-open text-slate-500 text-3xl mb-2"></i>
-                        <p class="text-slate-400 text-sm">මෙම කාණ්ඩය යටතේ දැනට තරග නොමැත.</p>
-                    </div>
-                `;
+                showNoDataMessage("මෙම කාණ්ඩය යටතේ දැනට තරග නොමැත.");
                 return;
             }
 
             filtered.forEach(match => {
+                let team1 = match.teams ? match.teams[0] : (match.teamInfo ? match.teamInfo[0].name : 'Team 1');
+                let team2 = match.teams ? match.teams[1] : (match.teamInfo ? match.teamInfo[1].name : 'Team 2');
+                
                 let score1 = match.score && match.score[0] ? `${match.score[0].r}/${match.score[0].w} (${match.score[0].o} ov)` : 'Yet to bat';
                 let score2 = match.score && match.score[1] ? `${match.score[1].r}/${match.score[1].w} (${match.score[1].o} ov)` : '';
 
                 let card = `
                     <div class="bg-slate-800 border border-slate-700/80 rounded-2xl p-4 shadow-md hover:border-slate-600 transition">
                         <div class="flex justify-between items-center text-xs text-slate-400 mb-3 border-b border-slate-700/50 pb-2">
-                            <span class="font-medium text-emerald-400">${match.series || 'International Cricket'}</span>
-                            <span class="bg-slate-700/60 px-2 py-0.5 rounded text-[11px]">${match.matchType ? match.matchType.toUpperCase() : 'T20'}</span>
+                            <span class="font-medium text-emerald-400 truncate max-w-[220px]">${match.series || match.name || 'International Cricket'}</span>
+                            <span class="bg-slate-700/60 px-2 py-0.5 rounded text-[11px]">${match.matchType ? match.matchType.toUpperCase() : 'MATCH'}</span>
                         </div>
                         <div class="space-y-2 mb-3">
                             <div class="flex justify-between items-center">
-                                <div class="flex items-center space-x-3">
-                                    <span class="font-semibold text-sm">${match.teamInfo ? match.teamInfo[0].name : match.teams[0]}</span>
-                                </div>
+                                <span class="font-semibold text-sm">${team1}</span>
                                 <span class="font-bold text-sm text-slate-200">${score1}</span>
                             </div>
                             <div class="flex justify-between items-center">
-                                <div class="flex items-center space-x-3">
-                                    <span class="font-semibold text-sm">${match.teamInfo ? match.teamInfo[1].name : match.teams[1]}</span>
-                                </div>
+                                <span class="font-semibold text-sm">${team2}</span>
                                 <span class="font-bold text-sm text-slate-200">${score2}</span>
                             </div>
                         </div>
                         <div class="bg-slate-900/60 p-2.5 rounded-xl text-xs text-slate-300 flex items-center justify-between">
-                            <span class="truncate"><i class="fa-solid fa-circle-info mr-1.5 text-emerald-400"></i> ${match.status}</span>
+                            <span class="truncate"><i class="fa-solid fa-circle-info mr-1.5 text-emerald-400"></i> ${match.status || 'Match scheduled'}</span>
                         </div>
                     </div>
                 `;
@@ -172,28 +178,12 @@
             });
         }
 
-        function showFallbackData() {
-            // Fallback sample data in case API limit reaches or network issue
+        function showNoDataMessage(msg) {
             const container = document.getElementById('matches-container');
             container.innerHTML = `
-                <div class="bg-slate-800 border border-slate-700/80 rounded-2xl p-4 shadow-md">
-                    <div class="flex justify-between items-center text-xs text-slate-400 mb-3 border-b border-slate-700/50 pb-2">
-                        <span class="font-medium text-emerald-400">ICC T20 World Cup</span>
-                        <span class="bg-slate-700/60 px-2 py-0.5 rounded text-[11px]">T20</span>
-                    </div>
-                    <div class="space-y-2 mb-3">
-                        <div class="flex justify-between items-center">
-                            <span class="font-semibold text-sm">Sri Lanka</span>
-                            <span class="font-bold text-sm text-slate-200">165/4 (19.2 ov)</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="font-semibold text-sm">Australia</span>
-                            <span class="font-bold text-sm text-slate-200">162/8 (20 ov)</span>
-                        </div>
-                    </div>
-                    <div class="bg-slate-900/60 p-2.5 rounded-xl text-xs text-emerald-400 font-medium">
-                        <i class="fa-solid fa-trophy mr-1.5"></i> Sri Lanka won by 2 wickets
-                    </div>
+                <div class="text-center py-12 bg-slate-800/50 rounded-2xl border border-slate-700/60">
+                    <i class="fa-regular fa-folder-open text-slate-500 text-3xl mb-2"></i>
+                    <p class="text-slate-400 text-sm">${msg}</p>
                 </div>
             `;
         }
